@@ -1,11 +1,11 @@
 var http = require('http');
 var async = require('async');
 var fs = require("fs");
-
+var _ = require("lodash");
 var server = http.createServer();
 
 //This List saves all testHandles objects.
-var testHandles = {};
+var testHandles = [];
 
 //Added couter for uniqueness. This will act as a testHandle
 var testHandleCount = 0;
@@ -20,7 +20,7 @@ server.on('request', function (request, response) {
     request.on('end', function () {
         if (request.method === 'POST') {
             if (request.url === "/startTest") {
-            	console.log("In startTest--",data,"--");
+            	
                 var siteInfo = JSON.parse(data);
                 var siteToTest = siteInfo.sitesToTest;
                 var siteList = [];
@@ -36,26 +36,96 @@ server.on('request', function (request, response) {
                     "testHandle": testHandleCount.toString(),
                     "status": "started"
                 }
-                testHandles[testHandleCount.toString()] = testHandle;
+                
+                var count = 0;
+                var min = 32767;
+                var max = 0;
+                var avgTime = 0;
+                
                 async.eachSeries(siteList,function(item,callback){
-                	var startTime = (new Date).getTime();
+                		var startTime = (new Date).getTime();
+                		
+                		http.get(item , function(response){
+                			var endTime = (new Date).getTime();
+                			var responsetime = endTime - startTime;
+                			avgTime = _.add(avgTime,responsetime)
+                			if(responsetime < min)
+                				min = responsetime;
+                			if(responsetime > max)
+                				max = responsetime;
+                			count++;
+                			if(count == iterations){
+                				console.log("--------------------Re-----------",avgTime, " ", iterations )
+                				var testHandle = {
+                                        "site": item,
+                                        "iterations": iterations,
+                                        "min": min,
+                                        "max" : max,
+                                        "avg" : ( avgTime ) / iterations,
+                                        "startTestTime" : startTime,
+                                        "endTestTime" : (new Date).getTime()
+                        		}
+                        		testHandles.push(testHandle);
+                        		console.log(JSON.stringify(testHandle));
+                        		startTime = (new Date).getTime();
+                        		count = 0;
+                        		max = -1;
+                        		min = 32767;
+                        		avgTime = 0;
+                			}
+                			callback();
+                	    })
                 	
-            		console.log("Calling : ",item," time : ",startTime);
-            		http.get(item , function(response){
-            			var endTime = (new Date).getTime();
-            			var responsetime = endTime - startTime;
-            			console.log(item,' time :', responsetime, " : ", response.statusCode);
-            			callback();
-            	    })
-            },function(err){ 
+              },function(err){
+            	 if (err) {
+                     return console.error(err);
+                 }
             	console.log("All done"); 
+            	fs.readFile('alltests.txt', function (err, data) {
+                    if (err) {
+                       return console.error(err);
+                    }
+                    var existingData = JSON.parse(data.toString());
+                    for(i = 0 ; i < existingData.length; i++){
+                    	console.log(existingData[i].testHandle);
+                    	if(testHandleCount == existingData[i].testHandle){
+                    		existingData[i].status = 'finished'; 
+                    		existingData[i].sitesresults = testHandles;
+                    	}
+                    		
+                    }
+                    testHandles = []
+                    fs.writeFile('alltests.txt', JSON.stringify(existingData),function(err) {
+                  	   if (err) {
+                  		      return console.error(err);
+                  	   }
+                     });
+                 });
             });
             var respObj = {
                     "testHandle": testHandleCount.toString(),
                     "status": "started"
             }
-                
-           response.write(JSON.stringify(respObj));
+            
+            fs.readFile('alltests.txt', function (err, data) {
+                if (err) {
+                   return console.error(err);
+                }
+                var testData
+                if(data.toString().length > 0){
+                	testData = JSON.parse(data.toString());
+	            }else{
+                	testData = []
+                }
+                testData.unshift(respObj);
+                fs.writeFile('alltests.txt', JSON.stringify(testData),function(err) {
+	             	   if (err) {
+	             		      return console.error(err);
+	             	   }
+	            });
+             });
+            
+            response.write(JSON.stringify(respObj));
                 
            }
         }
@@ -66,50 +136,106 @@ server.on('request', function (request, response) {
             if (url.indexOf("/testStatus") !== -1) {
                 var testHandleVal = url.replace("/testStatus?testHandle=", "");
                 console.log(testHandleVal);
-                //Check the testHandles list for given input testHandle
-                if (testHandles.hasOwnProperty(testHandleVal)) {
-                    //Fetch the object from List
-                    var status = testHandles[testHandleVal].status;
-                    var path = 'alltests.txt'
-                    var respObj = {
-                        "testHandle": testHandleVal,
-                        "status": status
-                    }
+                var status ='';
+                var respObj;
+                async.series([
+                	               function(callback) {
+                                	  fs.readFile('alltests.txt', function (err, data) {
+                                          if (err) {
+                                             return console.error(err);
+                                          }
+                                          var existingData = JSON.parse(data.toString());
+                                          for(i = 0 ; i < existingData.length; i++){
+                                          	if(testHandleVal == existingData[i].testHandle){
+                                          		status = existingData[i].status;
+                                          		break;
+                                          	}                            		
+                                         }
+                                         respObj = {
+                                                  "testHandle": testHandleVal,
+                                                  "status": status
+                                              }
+                                        
+                                         callback();
+                                         
+                                    });
+                                      
+                                  },
+                	              function(callback) {
+                                	 /* response.write(JSON.stringify(respObj), function(err){
+                                		  callback();
+                                  });*/
+                                	  callback();
+                	              },
+                	                 
+                	             ], function (err, result) {
+                	                console.log("in final two");
+                	             });
                 
-                    response.write(JSON.stringify(respObj));
-
-                } else {
-                    response.write("No Test Handle found");
-                }
-            }
+                		
+             }
 
             if (url.indexOf("/testResults") !== -1) {
                 var testHandleVal = url.replace("/testResults?testHandle=", "");
-                if (testHandles.hasOwnProperty(testHandleVal)) {
-                    var status = testHandles[testHandleVal].status;
-                    if (status === "completed") {
-                        var siteToTest = testHandles[testHandleVal];
-                        //Form the json for each test by iterating on testHandles
-                        var respObj = {};
-
-                        //Finally send json data
-                        response.write(JSON.stringify(respObj));
-
-                    } else {
-                        //Set the status as 400.
-                        response.statusCode = 400;
-                    }
-                } else {
-                    response.write("No Test Handle found");
-                }
+                var sitedata;
+                async.series([
+           	               function(callback) {
+                           	  fs.readFile('alltests.txt', function (err, data) {
+                                     if (err) {
+                                        return console.error(err);
+                                     }
+                                     var existingData = JSON.parse(data.toString());
+                                     for(i = 0 ; i < existingData.length; i++){
+                                     	if(testHandleVal == existingData[i].testHandle){
+                                     		sitedata = existingData[i].sitesresults;
+                                     		break;
+                                     	}                            		
+                                    }
+                                    
+                                   callback();
+                               });
+                          },
+           	              function(callback) {
+                           	 /* response.write(JSON.stringify(sitedata), function(err){
+                           		  callback();
+                             });*/
+                           	  callback();
+           	              },
+           	                 
+           	             ], function (err, result) {
+           	                console.log("in final two");
+           	             });
             }
 
             if (url.indexOf("/allTests") !== -1) {
 
-                var handlesArr = Object.keys(testHandles);
-                var respObj = {
-                    "handles": handlesArr
-                }
+            	async.series([
+              	               function(callback) {
+                              	  fs.readFile('alltests.txt', function (err, data) {
+                                        if (err) {
+                                           return console.error(err);
+                                        }
+                                        var existingData = JSON.parse(data.toString());
+                                        for(i = 0 ; i < existingData.length; i++){
+                                        	if(testHandleVal == existingData[i].testHandle){
+                                        		sitedata = existingData[i].sitesresults;
+                                        		break;
+                                        	}                            		
+                                       }
+                                       
+                                      callback();
+                                  });
+                             },
+              	              function(callback) {
+                              	 /* response.write(JSON.stringify(sitedata), function(err){
+                              		  callback();
+                                });*/
+                              	  callback();
+              	              },
+              	                 
+              	             ], function (err, result) {
+              	                console.log("in final two");
+              	             });
                 response.write(JSON.stringify(respObj));
             }
         }

@@ -1,0 +1,1 @@
+[{"testHandle":"1","status":"finished","sitesresults":[{"site":"http://www.google.com","iterations":10,"min":105,"max":263,"avg":132.1,"startTestTime":1497742105205,"endTestTime":1497742105320},{"site":"http://cnn.com","iterations":10,"min":52,"max":93,"avg":70.1,"startTestTime":1497742105953,"endTestTime":1497742106027}]}]
