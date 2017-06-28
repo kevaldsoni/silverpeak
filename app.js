@@ -160,9 +160,8 @@ server.on('request', function (request, response) {
 	                                     		break;
                                      		}else{
                                      			response.write("400");
-                                     			response.end();
-            				 	                
-                                     		}
+                                                response.end();
+            				 	            }
                                      	}
                                      }
                                      
