@@ -159,7 +159,7 @@ server.on('request', function (request, response) {
 	                                     		callback();
 	                                     		break;
                                      		}else{
-                                     			response.write("400");
+                                     			response.writeHead("400",{'Content-Type': 'text/html'});
                                                 response.end();
             				 	            }
                                      	}

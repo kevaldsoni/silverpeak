@@ -68,7 +68,6 @@ class TestSites{
 										System.out.print(obj.get("min")+"\t");
 										System.out.print(obj.get("max")+"\t");
 										System.out.print(obj.get("avg")+"\t");
-										System.out.print(obj.get("avg")+"\t");
 										System.out.print(obj.get("startTestTime")+"\t");
 										System.out.print(obj.get("endTestTime")+"\t");
 										System.out.println();
